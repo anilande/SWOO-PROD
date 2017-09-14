@@ -4,47 +4,6 @@ const path = require('path')
 const request = require('request')
 const compression = require('compression')
 const pkg = require(path.resolve(process.cwd(), 'package.json'))
-const
-    sitemap = require('sitemap')
-sm = sitemap.createSitemap({
-    hostname: 'http://swoo.tv',
-    cacheTime: 1000 * 60 * 24,  // keep the sitemap cached for 24 hours
-}),
-    addBroadcastsToSitemap = (posts) => {
-        posts.forEach((post) => {
-            sm.add({
-                url: post.slug,
-                changefreq: 'daily',
-            })
-        })
-    },
-    findBroadcastsToSitemap = (fn) => {
-        const urls = [
-            {type: 'static', slug: '/home'},
-            {type: 'static', slug: '/search'},
-            {type: 'static', slug: '/privacy-policy'},
-            {type: 'static', slug: '/terms-of-service'},
-            {type: 'static', slug: '/profile/?'},
-            {video: 'static', slug: '/broadcast/?'},
-        ]
-/*
-sitemap todo code
-        const images = [
-            {
-                url: '/img1.jpg',
-                caption: 'An image',
-                title: 'The Title of Image One',
-                geoLocation: 'London, United Kingdom',
-                license: 'https://creativecommons.org/licenses/by/4.0/',
-            },
-        ]
-
-        const video = [
-          {thumbnail_loc: '/tmbn2.jpg', title: 'Another video title', description: 'This is another video'},
-        ]
-*/
-        fn(false, urls)
-    }
 
 // Dev middleware
 const addDevMiddlewares = (app, webpackConfig) => {
@@ -142,34 +101,6 @@ const addDevMiddlewares = (app, webpackConfig) => {
         })
     })
 
-    app.get('/sitemap.xml', function(req, res, next) {
-    // only update the sitemap if the cache is expired
-        if (sm.isCacheValid()) {
-            sm.toXML(function(error, xml) {
-                res.header('Content-Type', 'application/xml')
-                res.send(xml)
-            })
-        } else {
-        // remove every page from the expired sitemap
-            sm.urls = []
-
-        // get every post from the database
-            findBroadcastsToSitemap(function(err, posts) {
-            // if some error occurs, generate an empty sitemap instead of aborting
-                if (err) {
-                    console.log(err)
-                }	else {
-                    addBroadcastsToSitemap(posts)
-                }
-
-                sm.toXML(function(error, xml) {
-                    res.header('Content-Type', 'application/xml')
-                    res.send(xml)
-                })
-            })
-        }
-    })
-
     app.get('*', (req, res) => {
         fs.readFile(path.join(compiler.outputPath, 'index.html'), (err, file) => {
             if (err) {
@@ -181,8 +112,56 @@ const addDevMiddlewares = (app, webpackConfig) => {
     })
 }
 
-// Production middlewares
+const metaDataList = {
+    'home': {
+        title: 'Experience the joy of being live with Swoo. Invite only live video broadcasting platform.',
+        desc: 'Exclusive and powerful invite-only platform for influencers, experts, educators, reporters, artists, and performers, to broadcast live video to the world, monetize their live sessions and grow their tribe. Download Swoo App on AppStore & PlayStore.',
+    },
+    'privacy-and-policy': {
+        title: 'Swoo Privacy Policy',
+        desc: 'Read about how Swoo respects the privacy of community of Swoo audience and Swoo broadcasters.',
+    },
+    'terms-and-conditions': {
+        title: 'Swoo Terms of Use',
+        desc: 'Read about the terms of use you agree as audience and broadcaster when you use Swoo live broadcasting platform on mobile, web or desktop.',
+    },
+    'faq': {
+        title: 'Swoo Frequently Asked Questions',
+        desc: 'Looking for something? Browse through FAQs about Swoo to know more about us.',
+    },
+    'blog': {
+        title: 'Experience the joy of being live with Swoo. Invite only live video broadcasting platform.',
+        desc: 'Experience the joy of being live with Swoo. Invite only live video broadcasting platform.',
+    },
+    'search': {
+        title: 'Discover interesting live video sessions • Swoo Live Video Sessions',
+        desc: 'Discover live video broadcasts from well known personalities from all spheres of life. Interact with the broadcasters and viewers by instant comments, share the broadcasts and invite your friends and catch-up on missed live sessions.',
+    },
+    'profile': {
+        title: 'Swoo Live Audience',
+        desc: ' influencers on Swoo - Engage with broadcasters on Swoo live video sessions.',
+    },
+    'channels': {
+        title: 'Discover interesting live video sessions • Swoo Live Video Sessions',
+        desc: 'Discover live video broadcasts from well known personalities from all spheres of life. Interact with the broadcasters and viewers by instant comments, share the broadcasts and invite your friends and catch-up on missed live sessions.',
+    },
+    'support': {
+        title: 'Swoo Support & Customer Care',
+        desc: 'Need Help? Tell us about your problem, we at Swoo would be happy to educate, assist and support.',
+    },
+    'broadcast': {
+        title: 'Experience the joy of being live with Swoo. Invite only live video broadcasting platform.',
+        desc: 'Experience the joy of being live with Swoo. Invite only live video broadcasting platform.',
+    },
+    'broadcasters': {
+        title: 'Swoo Live Audience',
+        desc: ' influencers on Swoo - Engage with broadcasters on Swoo live video sessions.',
+    },
+}
+
+// Production ~QA   
 const addProdMiddlewares = (app, options) => {
+    const fs = require('fs')
     const publicPath = options.publicPath || '/static/'
     const outputPath = options.outputPath || path.resolve(process.cwd(), 'build')
 
@@ -192,9 +171,85 @@ const addProdMiddlewares = (app, options) => {
     app.use(compression())
     app.use(publicPath, express.static(outputPath))
 
-    app.use(require('prerender-node').set('host', 'swoo.tv'))
+    app.use(require('prerender-node').set('host', 'swoo.tv').set('protocol', 'https'))
 
-    app.get('*', (req, res) => res.sendFile(path.resolve(outputPath, 'index.html')))
+    // the dev custom paths are been moved to nginx config. refer /app/nginx.config file for the info
+
+    app.get('*', (req, res) => {
+        // res.sendFile(path.resolve(outputPath, 'index.html'))
+        fs.readFile(path.resolve(outputPath, 'index.html'), 'utf8', (err, data) => {
+            if (err) {
+                res.sendStatus(404)
+            } else {
+                let metsDataStr = "<meta charset=\"utf-8\">"
+                let metaData = {
+                    title: 'Experience the joy of being live with Swoo. Invite only live video broadcasting platform.',
+                    desc: 'Exclusive and powerful invite-only platform for influencers, experts, educators, reporters, artists, and performers, to broadcast live video to the world, monetize their live sessions and grow their tribe. Download Swoo App on AppStore & PlayStore.',
+                    url: 'https://swoo.tv/',
+                    image: 'https://swoo.tv/favicon.ico',
+                    site: 'https://swoo.tv/',
+                }
+
+                if (req.params[0]) {
+                    metaData.url += req.params[0]
+                    const key = req.params[0].split('/')
+                    key.shift() // remove first element since it is empty
+
+                    if (key.length >= 2) {
+                        if (key[0] == 'profile') {
+                            metaData.title = key[0] + " - " + key[1] + " : " + metaDataList[key[0]].title
+                            metaData.desc = key[0] + " - " + key[1] + " : " + metaDataList[key[0]].desc
+                        } else if (key[0] == 'blog') {
+                            metaData.title = key[0] + " - " + metaDataList[key[0]].title + key[2]
+                            metaData.desc = key[0] + " - " + metaDataList[key[0]].desc + key[2]
+                        } else if (key[0] !== 'broadcast') {
+                            metaData.title = key[0]
+                            metaData.desc = key[0]
+                        }
+                    } else if (metaDataList[key]) {
+                        metaData.title = key[0] + " - " + metaDataList[key[0]].title
+                        metaData.desc = key[0] + " - " + metaDataList[key[0]].desc
+                    }
+                }
+
+                const metaTags = [
+                    {name: 'title', content: metaData.title},
+                    {name: 'description', content: metaData.desc},
+
+                    {property: 'og:title', content: metaData.title},
+                    {property: 'og:description', content: metaData.desc},
+                    {property: 'og:type', content: 'website'},
+                    {property: 'og:url', content: metaData.url},
+                    {property: 'og:image', content: metaData.image},
+
+                    {name: 'twitter:card', content: 'summary'},
+                    {name: 'twitter:site', content: metaData.site},
+                    {name: 'twitter:url', content: metaData.url},
+                    {name: 'twitter:title', content: metaData.title},
+                    {name: 'twitter:description', content: metaData.desc},
+                    {name: 'twitter:image', content: metaData.image},
+
+                    {name: 'al:web:url', content: metaData.site},
+                    {name: 'al:ios:app_name', content: 'Swoo'},
+                    {name: 'al:ios:app_store_id', content: '1201718019'},
+                    {name: 'al:ios:url', content: metaData.site},
+                    {name: 'al:android:app_name', content: 'Swoo'},
+                    {name: 'al:android:package', content: 'com.kryptolabs.android.speakerswire'},
+                    {name: 'al:android:url', content: metaData.site},
+                ]
+
+                metaTags.forEach((item) => {
+                    if (item.name) {
+                        metsDataStr += "<Meta name='" + item.name + "' content='" + item.content + "'>"
+                    } else if (item.property) {
+                        metsDataStr += "<Meta property='" + item.property + "' content='" + item.content + "'>"
+                    }
+                })
+                data = data.replace("<title>Experience the joy of being live with Swoo. Invite only live video broadcasting platform.</title>", "<title>" + metaData.title + "</title>")
+                res.send(data.replace("<meta charset=\"utf-8\">", metsDataStr))
+            }
+        })
+    })
 }
 
 /**

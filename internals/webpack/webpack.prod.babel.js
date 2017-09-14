@@ -19,10 +19,7 @@ module.exports = require('./webpack.base.babel')({
     },
 
     plugins: [
-        new LodashModuleReplacementPlugin({
-          'collections': true,
-          'shorthands': true
-        }),
+        new LodashModuleReplacementPlugin,
         new webpack.optimize.CommonsChunkPlugin({
             name: 'vendor',
             children: true,
